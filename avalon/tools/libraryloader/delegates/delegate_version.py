@@ -1,5 +1,5 @@
-from ...vendor.Qt import QtWidgets, QtCore
-from .models import SubsetsModel
+from ....vendor.Qt import QtWidgets, QtCore
+from ..models import SubsetModel
 
 
 class VersionDelegate(QtWidgets.QStyledItemDelegate):
@@ -22,7 +22,7 @@ class VersionDelegate(QtWidgets.QStyledItemDelegate):
         return self._format_version(value)
 
     def createEditor(self, parent, option, index):
-        node = index.data(SubsetsModel.NodeRole)
+        node = index.data(SubsetModel.NodeRole)
         if node.get("isGroup") or node.get("isMerged"):
             return
 
@@ -51,7 +51,7 @@ class VersionDelegate(QtWidgets.QStyledItemDelegate):
         assert isinstance(value, int), "Version is not `int`"
 
         # Add all available versions to the editor
-        node = index.data(SubsetsModel.NodeRole)
+        node = index.data(SubsetModel.NodeRole)
         parent_id = node['version_document']['parent']
         versions = self.dbcon.find(
             {"type": "version", "parent": parent_id},
