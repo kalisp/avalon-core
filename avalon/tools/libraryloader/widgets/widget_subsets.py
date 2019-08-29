@@ -7,7 +7,7 @@ from ....vendor import qtawesome as awesome
 from ....vendor.Qt import QtWidgets, QtCore
 
 
-class SubsetWidget(QtWidgets.QWidget):
+class SubsetsWidget(QtWidgets.QWidget):
     """A widget that lists the published subsets for an asset"""
 
     active_changed = QtCore.Signal()    # active index changed

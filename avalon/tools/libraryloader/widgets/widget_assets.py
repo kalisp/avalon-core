@@ -8,7 +8,7 @@ from ..models import RecursiveSortFilterProxyModel, AssetModel, AssetView
 from ...gui.widgets.lib import _iter_model_rows
 
 
-class AssetWidget(QtWidgets.QWidget):
+class AssetsWidget(QtWidgets.QWidget):
     """A Widget to display a tree of assets with filter
 
     To list the assets of the active project:
