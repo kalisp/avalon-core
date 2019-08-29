@@ -6,7 +6,7 @@ from ....vendor import qtawesome as awesome
 from ....vendor.Qt import QtCore
 
 
-class SubsetsModel(TreeModel):
+class SubsetModel(TreeModel):
     COLUMNS = ["subset",
                "family",
                "version",

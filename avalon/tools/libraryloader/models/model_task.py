@@ -6,7 +6,7 @@ from ....vendor import qtawesome as awesome
 from ....vendor.Qt import QtCore
 
 
-class TasksModel(TreeModel):
+class TaskModel(TreeModel):
     """A model listing the tasks combined for a list of assets"""
 
     COLUMNS = ["name", "count"]
