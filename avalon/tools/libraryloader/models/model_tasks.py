@@ -11,9 +11,10 @@ class TasksModel(TreeModel):
 
     COLUMNS = ["name", "count"]
 
-    def __init__(self, parent=None):
-        super(TasksModel, self).__init__()
-        self.db = parent.db
+    def __init__(self, dbcon, parent=None):
+        super(TaskModel, self).__init__(parent=parent)
+        self.dbcon = dbcon
+
         self._num_assets = 0
         self._icons = {
             "__default__": awesome.icon(
@@ -25,7 +26,7 @@ class TasksModel(TreeModel):
 
     def _get_task_icons(self):
         # Get the project configured icons from database
-        project = self.db.find_one({"type": "project"})
+        project = self.dbcon.find_one({"type": "project"})
         tasks = project['config'].get('tasks', [])
         for task in tasks:
             icon_name = task.get("icon", None)

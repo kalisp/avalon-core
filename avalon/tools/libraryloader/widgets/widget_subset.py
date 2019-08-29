@@ -13,10 +13,10 @@ class SubsetWidget(QtWidgets.QWidget):
     active_changed = QtCore.Signal()    # active index changed
     version_changed = QtCore.Signal()   # version state changed for a subset
 
-    def __init__(self, parent=None):
+    def __init__(self, dbcon, parent=None):
         super(SubsetWidget, self).__init__(parent=parent)
 
-        self.db = parent.db
+        self.dbcon = dbcon
         self.tool_name = None
         if hasattr(parent, 'tool_name'):
             self.tool_name = parent.tool_name
@@ -114,13 +114,13 @@ class SubsetWidget(QtWidgets.QWidget):
         node = point_index.data(self.model.NodeRole)
         version_id = node['version_document']['_id']
 
-        representations = self.db.find({
+        representations = self.dbcon.find({
             "type": "representation",
             "parent": version_id}
         )
         for representation in representations:
             for loader in lib.loaders_from_representation(
-                self.db,
+                self.dbcon,
                 available_loaders,
                 representation['_id']
             ):
@@ -201,7 +201,7 @@ class SubsetWidget(QtWidgets.QWidget):
         for row in rows:
             node = row.data(self.model.NodeRole)
             version_id = node["version_document"]["_id"]
-            representation = self.db.find_one({
+            representation = self.dbcon.find_one({
                 "type": "representation",
                 "name": representation_name,
                 "parent": version_id
@@ -215,7 +215,7 @@ class SubsetWidget(QtWidgets.QWidget):
 
             try:
                 lib.load(
-                    db=self.db,
+                    db=self.dbcon,
                     Loader=loader,
                     representation=representation
                 )

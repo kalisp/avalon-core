@@ -22,11 +22,11 @@ class AssetWidget(QtWidgets.QWidget):
     selection_changed = QtCore.Signal()  # on view selection change
     current_changed = QtCore.Signal()    # on view current index change
 
-    def __init__(self, parent):
+    def __init__(self, dbcon, parent):
         super(AssetWidget, self).__init__(parent=parent)
         self.setContentsMargins(0, 0, 0, 0)
 
-        self.parent_widget = parent
+        self.dbcon = dbcon
 
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -69,13 +69,9 @@ class AssetWidget(QtWidgets.QWidget):
         self.proxy = proxy
         self.view = view
 
-    @property
-    def db(self):
-        return self.parent_widget.db
-
     def collect_data(self):
-        project = self.db.find_one({'type': 'project'})
-        asset = self.db.find_one({'_id': self.get_active_asset()})
+        project = self.dbcon.find_one({'type': 'project'})
+        asset = self.dbcon.find_one({'_id': self.get_active_asset()})
 
         try:
             index = self.task_view.selectedIndexes()[0]
@@ -94,7 +90,7 @@ class AssetWidget(QtWidgets.QWidget):
         output = []
         if entity.get('data', {}).get('visualParent', None) is None:
             return output
-        parent = self.db.find_one({'_id': entity['data']['visualParent']})
+        parent = self.dbcon.find_one({'_id': entity['data']['visualParent']})
         output.append(parent['name'])
         output.extend(self.get_parents(parent))
         return output
