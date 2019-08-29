@@ -37,21 +37,23 @@ class TaskModel(TreeModel):
                 )
                 self._icons[task["name"]] = icon
 
-    def set_assets(self, asset_ids):
+    def set_assets(self, asset_ids=[], asset_entities=None):
         """Set assets to track by their database id
 
         Arguments:
             asset_ids (list): List of asset ids.
-
+            asset_entities (list): List of asset entities from MongoDB.
         """
 
         assets = list()
-        for asset_id in asset_ids:
-            asset = self.db.find_one(
-                {"_id": asset_id, "type": "asset"}
-            )
-            assert asset, "Asset not found by id: {0}".format(asset_id)
-            assets.append(asset)
+
+        if asset_entities:
+            assets = asset_entities
+        else:
+            for asset_id in asset_ids:
+                asset = self.dbcon.find_one({"_id": asset_id, "type": "asset"})
+                assert asset, "Asset not found by id: {0}".format(asset_id)
+                assets.append(asset)
 
         self._num_assets = len(assets)
 
@@ -62,7 +64,7 @@ class TaskModel(TreeModel):
 
         # If no asset tasks are defined, use the project tasks.
         if assets and not tasks:
-            project = self.db.find_one({"type": "project"})
+            project = self.dbcon.find_one({"type": "project"})
             tasks.update(
                 [task["name"] for task in project["config"].get("tasks", [])]
             )
@@ -99,7 +101,7 @@ class TaskModel(TreeModel):
                 if section == 1:  # count column
                     return "count ({0})".format(self._num_assets)
 
-        return super(TasksModel, self).headerData(section, orientation, role)
+        return super(TaskModel, self).headerData(section, orientation, role)
 
     def data(self, index, role):
 
@@ -111,4 +113,4 @@ class TaskModel(TreeModel):
             if index.column() == 0:
                 return index.internalPointer()['icon']
 
-        return super(TasksModel, self).data(index, role)
+        return super(TaskModel, self).data(index, role)
