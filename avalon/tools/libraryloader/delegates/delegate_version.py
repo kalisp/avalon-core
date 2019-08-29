@@ -9,9 +9,9 @@ class VersionDelegate(QtWidgets.QStyledItemDelegate):
     first_run = False
     lock = False
 
-    def __init__(self, parent=None):
-        super(VersionDelegate, self).__init__()
-        self.db = parent.db
+    def __init__(self, dbcon, *args, **kwargs):
+        super(VersionDelegate, self).__init__(*args, **kwargs)
+        self.dbcon = dbcon
 
     def _format_version(self, value):
         """Formats integer to displayable version name"""
@@ -23,7 +23,7 @@ class VersionDelegate(QtWidgets.QStyledItemDelegate):
 
     def createEditor(self, parent, option, index):
         node = index.data(SubsetsModel.NodeRole)
-        if node.get("isGroup"):
+        if node.get("isGroup") or node.get("isMerged"):
             return
 
         editor = QtWidgets.QComboBox(parent)
@@ -53,7 +53,7 @@ class VersionDelegate(QtWidgets.QStyledItemDelegate):
         # Add all available versions to the editor
         node = index.data(SubsetsModel.NodeRole)
         parent_id = node['version_document']['parent']
-        versions = self.db.find(
+        versions = self.dbcon.find(
             {"type": "version", "parent": parent_id},
             sort=[("name", 1)]
         )
