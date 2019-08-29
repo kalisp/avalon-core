@@ -1,20 +1,20 @@
 import logging
-from .model_tree import TreeModel
-from .model_node import Node
+from ...gui.models import Node, TreeModel
 from .... import style
-from ....vendor import qtawesome as awesome
+from ....vendor import qtawesome
 from ....vendor.Qt import QtCore, QtGui
 
 log = logging.getLogger(__name__)
 
 
 class AssetModel(TreeModel):
-    """A model listing assets in the silo in the active project.
+    """ Displaying assets in hierarchical tree by visualParent.
 
     The assets are displayed in a treeview, they are visually parented by
     a `visualParent` field in the database containing an `_id` to a parent
     asset.
 
+    Entities with `visualParent` set to None/null/nil are used as top items.
     """
 
     COLUMNS = ["label"]
@@ -24,18 +24,18 @@ class AssetModel(TreeModel):
 
     DocumentRole = QtCore.Qt.UserRole + 2
     ObjectIdRole = QtCore.Qt.UserRole + 3
+    subsetColorsRole = QtCore.Qt.UserRole + 4
 
-    def __init__(self, parent):
+    def __init__(self, dbcon, parent=None):
         super(AssetModel, self).__init__(parent=parent)
-        self.parent_widget = parent
+
+        self.dbcon = dbcon
+        self.asset_colors = {}
         self.refresh()
 
-    @property
-    def db(self):
-        return self.parent_widget.db
-
     def _add_hierarchy(self, parent=None):
-
+        # Reset colors
+        self.asset_colors = {}
         # Find the assets under the parent
         find_data = {
             "type": "asset"
@@ -48,7 +48,7 @@ class AssetModel(TreeModel):
         else:
             find_data["data.visualParent"] = parent['_id']
 
-        assets = self.db.find(find_data).sort('name', 1)
+        assets = self.dbcon.find(find_data).sort('name', 1)
         for asset in assets:
             # get label from data, otherwise use name
             data = asset.get("data", {})
@@ -67,20 +67,24 @@ class AssetModel(TreeModel):
                 "deprecated": deprecated,
                 "_document": asset
             })
+
             self.add_child(node, parent=parent)
 
             # Add asset's children recursively
             self._add_hierarchy(node)
+
+            self.asset_colors[asset["_id"]] = []
 
     def refresh(self):
         """Refresh the data for the model."""
 
         self.clear()
         if (
-            self.db.active_project() is None or
-            self.db.active_project() == ''
+            self.dbcon.active_project() is None or
+            self.dbcon.active_project() == ''
         ):
             return
+
         self.beginResetModel()
         self._add_hierarchy(parent=None)
         self.endResetModel()
@@ -88,8 +92,22 @@ class AssetModel(TreeModel):
     def flags(self, index):
         return QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable
 
-    def data(self, index, role):
+    def setData(self, index, value, role=QtCore.Qt.EditRole):
+        if not index.isValid():
+            return False
 
+        if role == self.subsetColorsRole:
+            asset_id = index.data(self.ObjectIdRole)
+            self.asset_colors[asset_id] = value
+
+            # passing `list()` for PyQt5 (see PYSIDE-462)
+            self.dataChanged.emit(index, index, list())
+
+            return True
+
+        return super(AssetModel, self).setData(index, value, role)
+
+    def data(self, index, role):
         if not index.isValid():
             return
 
@@ -117,7 +135,7 @@ class AssetModel(TreeModel):
 
                 try:
                     key = "fa.{0}".format(icon)  # font-awesome key
-                    icon = awesome.icon(key, color=color)
+                    icon = qtawesome.icon(key, color=color)
                     return icon
                 except Exception as exception:
                     # Log an error message instead of erroring out completely
@@ -135,5 +153,11 @@ class AssetModel(TreeModel):
 
         if role == self.DocumentRole:
             return node.get("_document", None)
+
+        if role == self.subsetColorsRole:
+            asset_id = node.get("_id", None)
+            if not asset_id:
+                return []
+            return self.asset_colors.get(asset_id) or []
 
         return super(AssetModel, self).data(index, role)
