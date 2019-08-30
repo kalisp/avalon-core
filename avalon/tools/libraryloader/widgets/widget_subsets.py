@@ -1,10 +1,15 @@
 import inspect
 from .. import lib
-from ..delegates import PrettyTimeDelegate, VersionDelegate
-from ..models import SubsetsModel, FamiliesFilterProxyModel
+
 from .... import api, pipeline
-from ....vendor import qtawesome as awesome
+from ....vendor import qtawesome, Qt
 from ....vendor.Qt import QtWidgets, QtCore
+
+from ...gui.delegates import PrettyTimeDelegate
+from ...gui.widgets.lib import preserve_selection
+
+from ..delegates import VersionDelegate
+from ..models import SubsetModel, FamilyFilterProxyModel
 
 
 class SubsetsWidget(QtWidgets.QWidget):
@@ -13,24 +18,32 @@ class SubsetsWidget(QtWidgets.QWidget):
     active_changed = QtCore.Signal()    # active index changed
     version_changed = QtCore.Signal()   # version state changed for a subset
 
-    def __init__(self, dbcon, parent=None):
-        super(SubsetWidget, self).__init__(parent=parent)
+    def __init__(
+        self, dbcon, enable_grouping=True, parent=None, tool_name=None
+    ):
+        super(SubsetsWidget, self).__init__(parent=parent)
 
         self.dbcon = dbcon
-        self.tool_name = None
-        if hasattr(parent, 'tool_name'):
-            self.tool_name = parent.tool_name
+        self.tool_name = tool_name
 
-        model = SubsetsModel(self)
+        model = SubsetModel(self.dbcon, grouping=enable_grouping)
         proxy = QtCore.QSortFilterProxyModel()
-        family_proxy = FamiliesFilterProxyModel()
+        family_proxy = FamilyFilterProxyModel(self.dbcon)
         family_proxy.setSourceModel(proxy)
 
         filter = QtWidgets.QLineEdit()
         filter.setPlaceholderText("Filter subsets..")
 
+        groupable = QtWidgets.QCheckBox("Enable Grouping")
+        groupable.setChecked(enable_grouping)
+
+        top_bar_layout = QtWidgets.QHBoxLayout()
+        top_bar_layout.addWidget(filter)
+        top_bar_layout.addWidget(groupable)
+
         view = QtWidgets.QTreeView()
-        view.setIndentation(5)
+        view.setObjectName("SubsetView")
+        view.setIndentation(20)
         view.setStyleSheet("""
             QTreeView::item{
                 padding: 5px 1px;
@@ -40,7 +53,7 @@ class SubsetsWidget(QtWidgets.QWidget):
         view.setAllColumnsShowFocus(True)
 
         # Set view delegates
-        version_delegate = VersionDelegate(self)
+        version_delegate = VersionDelegate(dbcon=self.dbcon)
         column = model.COLUMNS.index("version")
         view.setItemDelegateForColumn(column, version_delegate)
 
@@ -50,7 +63,7 @@ class SubsetsWidget(QtWidgets.QWidget):
 
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(filter)
+        layout.addLayout(top_bar_layout)
         layout.addWidget(view)
 
         view.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
@@ -63,6 +76,9 @@ class SubsetsWidget(QtWidgets.QWidget):
             "delegates": {
                 "version": version_delegate,
                 "time": time_delegate
+            },
+            "state": {
+                "groupable": groupable
             }
         }
 
@@ -80,28 +96,72 @@ class SubsetsWidget(QtWidgets.QWidget):
         self.view.setModel(self.family_proxy)
         self.view.customContextMenuRequested.connect(self.on_context_menu)
 
+        header = self.view.header()
+        # Enforce the columns to fit the data (purely cosmetic)
+        if Qt.__binding__ in ("PySide2", "PyQt5"):
+            header.setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
+        else:
+            header.setResizeMode(QtWidgets.QHeaderView.ResizeToContents)
+
         selection = view.selectionModel()
         selection.selectionChanged.connect(self.active_changed)
 
         version_delegate.version_changed.connect(self.version_changed)
 
+        groupable.stateChanged.connect(self.set_grouping)
+
         self.filter.textChanged.connect(self.proxy.setFilterRegExp)
+        self.filter.textChanged.connect(self.view.expandAll)
 
         self.model.refresh()
 
         # Expose this from the widget as a method
         self.set_family_filters = self.family_proxy.setFamiliesFilter
 
-    def on_context_menu(self, point):
+    def is_groupable(self):
+        return self.data["state"]["groupable"].checkState()
 
+    def set_grouping(self, state):
+        with preserve_selection(tree_view=self.view,
+                                current_index=False):
+            self.model.set_grouping(state)
+
+    def on_context_menu(self, point):
         point_index = self.view.indexAt(point)
         if not point_index.isValid():
             return
 
+        # Get selected subsets without groups
+        selection = self.view.selectionModel()
+        rows = selection.selectedRows(column=0)
+
+        nodes = []
+        for row_index in rows:
+            node = row_index.data(self.model.NodeRole)
+            if node.get("isGroup"):
+                continue
+
+            elif node.get("isMerged"):
+                index = self.model.index(
+                    row_index.row(),
+                    row_index.column(),
+                    row_index.parent()
+                )
+
+                for i in range(self.model.rowCount(index)):
+                    node = row_index.child(i, 0).data(self.model.NodeRole)
+                    if node not in nodes:
+                        nodes.append(node)
+            else:
+                if node not in nodes:
+                    nodes.append(node)
+
         # Get all representation->loader combinations available for the
         # index under the cursor, so we can list the user the options.
+        loaders = list()
+
         available_loaders = api.discover(api.Loader)
-        if self.tool_name is not None:
+        if self.tool_name:
             for loader in available_loaders:
                 if hasattr(loader, 'tool_names'):
                     if not (
@@ -110,71 +170,122 @@ class SubsetsWidget(QtWidgets.QWidget):
                     ):
                         available_loaders.remove(loader)
 
-        loaders = list()
-        node = point_index.data(self.model.NodeRole)
-        version_id = node['version_document']['_id']
+        # Bool if is selected only one subset
+        one_node_selected = (len(nodes) == 1)
 
-        representations = self.dbcon.find({
-            "type": "representation",
-            "parent": version_id}
-        )
-        for representation in representations:
-            for loader in lib.loaders_from_representation(
-                self.dbcon,
-                available_loaders,
-                representation['_id']
-            ):
-                loaders.append((representation, loader))
+        # Prepare variables for multiple selected subsets
+        first_loaders = []
+        found_combinations = None
 
+        is_first = True
+        for node in nodes:
+            _found_combinations = []
+
+            version_id = node['version_document']['_id']
+            representations = self.dbcon.find({
+                "type": "representation",
+                "parent": version_id
+            })
+
+            for representation in representations:
+                for loader in lib.loaders_from_representation(
+                    self.dbcon,
+                    available_loaders,
+                    representation['_id']
+                ):
+                    # skip multiple select variant if one is selected
+                    if one_node_selected:
+                        loaders.append((representation, loader))
+                        continue
+
+                    # store loaders of first subset
+                    if is_first:
+                        first_loaders.append((representation, loader))
+
+                    # store combinations to compare with other subsets
+                    _found_combinations.append(
+                        (representation["name"].lower(), loader)
+                    )
+
+            # skip multiple select variant if one is selected
+            if one_node_selected:
+                continue
+
+            is_first = False
+            # Store first combinations to compare
+            if found_combinations is None:
+                found_combinations = _found_combinations
+            # Intersect found combinations with all previous subsets
+            else:
+                found_combinations = list(
+                    set(found_combinations) & set(_found_combinations)
+                )
+
+        if not one_node_selected:
+            # Filter loaders from first subset by intersected combinations
+            for repre, loader in first_loaders:
+                if (repre["name"], loader) not in found_combinations:
+                    continue
+
+                loaders.append((repre, loader))
+
+        menu = QtWidgets.QMenu(self)
         if not loaders:
             # no loaders available
-            self.echo("No compatible loaders available for this version.")
-            return
+            if one_node_selected:
+                self.echo("No compatible loaders available for this version.")
+                return
 
-        def sorter(value):
-            """Sort the Loaders by their order and then their name"""
-            Plugin = value[1]
-            return Plugin.order, Plugin.__name__
-
-        # List the available loaders
-        menu = QtWidgets.QMenu(self)
-        for representation, loader in sorted(loaders, key=sorter):
-
-            # Label
-            label = getattr(loader, "label", None)
-            if label is None:
-                label = loader.__name__
-
-            # Add the representation as suffix
-            label = "{0} ({1})".format(label, representation['name'])
-
-            action = QtWidgets.QAction(label, menu)
-            action.setData((representation, loader))
-
-            # Add tooltip and statustip from Loader docstring
-            tip = inspect.getdoc(loader)
-            if tip:
-                action.setToolTip(tip)
-                action.setStatusTip(tip)
-
-            # Support font-awesome icons using the `.icon` and `.color`
-            # attributes on plug-ins.
-            icon = getattr(loader, "icon", None)
-            if icon is not None:
-                try:
-                    key = "fa.{0}".format(icon)
-                    color = getattr(loader, "color", "white")
-                    action.setIcon(awesome.icon(key, color=color))
-                except Exception as e:
-                    print("Unable to set icon for loader "
-                          "{}: {}".format(loader, e))
-
+            self.echo("No compatible loaders available for your selection.")
+            action = QtWidgets.QAction(
+                "*No compatible loaders for your selection", menu
+            )
             menu.addAction(action)
+
+        else:
+            def sorter(value):
+                """Sort the Loaders by their order and then their name"""
+                Plugin = value[1]
+                return Plugin.order, Plugin.__name__
+
+            # List the available loaders
+            for representation, loader in sorted(loaders, key=sorter):
+
+                # Label
+                label = getattr(loader, "label", None)
+                if label is None:
+                    label = loader.__name__
+
+                # Add the representation as suffix
+                label = "{0} ({1})".format(label, representation['name'])
+
+                action = QtWidgets.QAction(label, menu)
+                action.setData((representation, loader))
+
+                # Add tooltip and statustip from Loader docstring
+                tip = inspect.getdoc(loader)
+                if tip:
+                    action.setToolTip(tip)
+                    action.setStatusTip(tip)
+
+                # Support font-awesome icons using the `.icon` and `.color`
+                # attributes on plug-ins.
+                icon = getattr(loader, "icon", None)
+                if icon is not None:
+                    try:
+                        key = "fa.{0}".format(icon)
+                        color = getattr(loader, "color", "white")
+                        action.setIcon(qtawesome.icon(key, color=color))
+                    except Exception as e:
+                        print("Unable to set icon for loader "
+                              "{}: {}".format(loader, e))
+
+                menu.addAction(action)
 
         # Show the context action menu
         global_point = self.view.mapToGlobal(point)
         action = menu.exec_(global_point)
-        if not action:
+        if not action or not action.data():
             return
 
         # Find the representation name and loader to trigger
@@ -198,8 +309,7 @@ class SubsetsWidget(QtWidgets.QWidget):
         rows.insert(0, point_index)
 
         # Trigger
-        for row in rows:
-            node = row.data(self.model.NodeRole)
+        for node in nodes:
             version_id = node["version_document"]["_id"]
             representation = self.dbcon.find_one({
                 "type": "representation",
@@ -208,20 +318,71 @@ class SubsetsWidget(QtWidgets.QWidget):
             })
             if not representation:
                 self.echo("Subset '{}' has no representation '{}'".format(
-                          node["subset"],
-                          representation_name
-                          ))
+                    node["subset"], representation_name
+                ))
                 continue
 
             try:
                 lib.load(
-                    db=self.dbcon,
+                    self.dbcon,
                     Loader=loader,
                     representation=representation
                 )
             except pipeline.IncompatibleLoaderError as exc:
                 self.echo(exc)
                 continue
+
+    def selected_subsets(self, _groups=False, _merged=False, _other=True):
+        selection = self.view.selectionModel()
+        rows = selection.selectedRows(column=0)
+
+        subsets = list()
+        if not any([_groups, _merged, _other]):
+            self.echo((
+                "This is a BUG: Selected_subsets args must contain"
+                " at least one value set to True"
+            ))
+            return subsets
+
+        for row in rows:
+            node = row.data(self.model.NodeRole)
+
+            if node.get("isGroup"):
+                if not _groups:
+                    continue
+
+            elif node.get("isMerged"):
+                if not _merged:
+                    continue
+            else:
+                if not _other:
+                    continue
+
+            subsets.append(node)
+
+        return subsets
+
+    def group_subsets(self, name, asset_ids, nodes):
+        field = "data.subsetGroup"
+
+        if name:
+            update = {"$set": {field: name}}
+            self.echo("Group subsets to '%s'.." % name)
+        else:
+            update = {"$unset": {field: ""}}
+            self.echo("Ungroup subsets..")
+
+        subsets = list()
+        for node in nodes:
+            subsets.append(node["subset"])
+
+        for asset_id in asset_ids:
+            filter = {
+                "type": "subset",
+                "parent": asset_id,
+                "name": {"$in": subsets},
+            }
+            self.dbcon.update_many(filter, update)
 
     def echo(self, message):
         print(message)

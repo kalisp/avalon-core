@@ -4,15 +4,18 @@ from ....vendor import qtawesome as awesome
 from ....vendor.Qt import QtWidgets, QtCore
 from .... import style
 
-from ..models import RecursiveSortFilterProxyModel, AssetModel, AssetView
-from ...gui.widgets.lib import _iter_model_rows
+from ...gui.models import RecursiveSortFilterProxyModel
+from ...gui.views import AssetsView
+from ...gui.delegates import AssetDelegate
+from ...gui.widgets.lib import _iter_model_rows, preserve_states
+from ..models import AssetModel
 
 
 class AssetsWidget(QtWidgets.QWidget):
     """A Widget to display a tree of assets with filter
 
     To list the assets of the active project:
-        >>> # widget = AssetWidget()
+        >>> # widget = AssetsWidget()
         >>> # widget.refresh()
         >>> # widget.show()
 
@@ -22,8 +25,8 @@ class AssetsWidget(QtWidgets.QWidget):
     selection_changed = QtCore.Signal()  # on view selection change
     current_changed = QtCore.Signal()    # on view current index change
 
-    def __init__(self, dbcon, parent):
-        super(AssetWidget, self).__init__(parent=parent)
+    def __init__(self, dbcon, parent, multiselection=False):
+        super(AssetsWidget, self).__init__(parent=parent)
         self.setContentsMargins(0, 0, 0, 0)
 
         self.dbcon = dbcon
@@ -33,12 +36,18 @@ class AssetsWidget(QtWidgets.QWidget):
         layout.setSpacing(4)
 
         # Tree View
-        model = AssetModel(self)
+        model = AssetModel(self.dbcon, self)
         proxy = RecursiveSortFilterProxyModel()
         proxy.setSourceModel(model)
         proxy.setFilterCaseSensitivity(QtCore.Qt.CaseInsensitive)
-        view = AssetView()
+
+        view = AssetsView()
         view.setModel(proxy)
+
+        if multiselection:
+            asset_delegate = AssetDelegate()
+            view.setSelectionMode(view.ExtendedSelection)
+            view.setItemDelegate(asset_delegate)
 
         # Header
         header = QtWidgets.QHBoxLayout()
@@ -62,7 +71,7 @@ class AssetsWidget(QtWidgets.QWidget):
         selection = view.selectionModel()
         selection.selectionChanged.connect(self.selection_changed)
         selection.currentChanged.connect(self.current_changed)
-        self.parent_widget.signal_project_changed.connect(self.refresh)
+        refresh.clicked.connect(self.refresh)
 
         self.refreshButton = refresh
         self.model = model
@@ -96,7 +105,11 @@ class AssetsWidget(QtWidgets.QWidget):
         return output
 
     def _refresh_model(self):
-        self.model.refresh()
+        with preserve_states(
+            self.view, column=0, role=self.model.ObjectIdRole
+        ):
+            self.model.refresh()
+
         self.assets_refreshed.emit()
 
     def refresh(self):
@@ -114,9 +127,9 @@ class AssetsWidget(QtWidgets.QWidget):
         """Return the assets' ids that are selected."""
         selection = self.view.selectionModel()
         rows = selection.selectedRows()
-        return [row.data(self.model.ObjectIdRole) for row in rows]
+        return [row.data(self.model.DocumentRole) for row in rows]
 
-    def select_assets(self, assets, expand=True):
+    def select_assets(self, assets, expand=True, key="name"):
         """Select assets by name.
 
         Args:
@@ -138,16 +151,25 @@ class AssetsWidget(QtWidgets.QWidget):
 
         # Select
         mode = selection_model.Select | selection_model.Rows
-        for index in _iter_model_rows(self.proxy,
-                                      column=0,
-                                      include_root=False):
-            data = index.data(self.model.NodeRole)
-            name = data['name']
-            if name in assets:
-                selection_model.select(index, mode)
+        for index in lib._iter_model_rows(
+            self.proxy, column=0, include_root=False
+        ):
+            # stop iteration if there are no assets to process
+            if not assets:
+                break
 
-                if expand:
-                    self.view.expand(index)
+            value = index.data(self.model.NodeRole).get(key)
+            if value not in assets:
+                continue
 
-                # Set the currently active index
-                self.view.setCurrentIndex(index)
+            # Remove processed asset
+            assets.pop(assets.index(value))
+
+            selection_model.select(index, mode)
+
+            if expand:
+                # Expand parent index
+                self.view.expand(self.proxy.parent(index))
+
+            # Set the currently active index
+            self.view.setCurrentIndex(index)

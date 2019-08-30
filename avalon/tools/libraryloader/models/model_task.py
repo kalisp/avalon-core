@@ -1,9 +1,10 @@
 import collections
-from . import TreeModel
-from .model_node import Node
-from .... import style
-from ....vendor import qtawesome as awesome
+
+from ....vendor import qtawesome
 from ....vendor.Qt import QtCore
+
+from .... import style
+from ...gui.models import TreeModel, Node
 
 
 class TaskModel(TreeModel):
@@ -17,7 +18,7 @@ class TaskModel(TreeModel):
 
         self._num_assets = 0
         self._icons = {
-            "__default__": awesome.icon(
+            "__default__": qtawesome.icon(
                 "fa.folder-o", color=style.colors.default
             )
         }
@@ -31,10 +32,8 @@ class TaskModel(TreeModel):
         for task in tasks:
             icon_name = task.get("icon", None)
             if icon_name:
-                icon = awesome.icon(
-                    "fa.{}".format(icon_name),
-                    color=style.colors.default
-                )
+                icon = qtawesome.icon("fa.{}".format(icon_name),
+                                    color=style.colors.default)
                 self._icons[task["name"]] = icon
 
     def set_assets(self, asset_ids=[], asset_entities=None):

@@ -38,6 +38,9 @@ class FamilyListWidget(QtWidgets.QListWidget):
         for name in sorted(unique_families):
 
             family = lib.get(lib.FAMILY_CONFIG, name)
+            if family.get("hideFilter"):
+                continue
+                
             label = family.get("label", name)
             icon = family.get("icon", None)
 
