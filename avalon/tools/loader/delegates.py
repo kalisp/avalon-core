@@ -271,29 +271,29 @@ class AssetDelegate(QtWidgets.QItemDelegate):
         else:
             icon_state = QtGui.QIcon.Off
 
-        if isinstance(icon, QtGui.QPixmap):
-            icon = QtGui.QIcon(icon)
-            option.decorationSize = icon.size() / icon.devicePixelRatio()
-
-        elif isinstance(icon, QtGui.QColor):
-            pixmap = QtGui.QPixmap(option.decorationSize)
-            pixmap.fill(icon)
-            icon = QtGui.QIcon(pixmap)
-
-        elif isinstance(icon, QtGui.QImage):
-            icon = QtGui.QIcon(QtGui.QPixmap.fromImage(icon))
-            option.decorationSize = icon.size() / icon.devicePixelRatio()
-
-        elif isinstance(icon, QtGui.QIcon):
-            actualSize = icon.actualSize(
-                option.decorationSize, icon_mode, icon_state
-            )
-            option.decorationSize = QtCore.QSize(
-                min(option.decorationSize.width(), actualSize.width()),
-                min(option.decorationSize.height(), actualSize.height())
-            )
-        option.icon = icon
         if icon:
+            if isinstance(icon, QtGui.QPixmap):
+                icon = QtGui.QIcon(icon)
+                option.decorationSize = icon.size() / icon.devicePixelRatio()
+
+            elif isinstance(icon, QtGui.QColor):
+                pixmap = QtGui.QPixmap(option.decorationSize)
+                pixmap.fill(icon)
+                icon = QtGui.QIcon(pixmap)
+
+            elif isinstance(icon, QtGui.QImage):
+                icon = QtGui.QIcon(QtGui.QPixmap.fromImage(icon))
+                option.decorationSize = icon.size() / icon.devicePixelRatio()
+
+            elif isinstance(icon, QtGui.QIcon):
+                actualSize = icon.actualSize(
+                    option.decorationSize, icon_mode, icon_state
+                )
+                option.decorationSize = QtCore.QSize(
+                    min(option.decorationSize.width(), actualSize.width()),
+                    min(option.decorationSize.height(), actualSize.height())
+                )
+            option.icon = icon
             option.features |= option.HasDecoration
 
         # Store original height
