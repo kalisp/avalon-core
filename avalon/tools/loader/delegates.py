@@ -294,6 +294,8 @@ class AssetDelegate(QtWidgets.QItemDelegate):
                     min(option.decorationSize.height(), actualSize.height())
                 )
             option.icon = icon
+
+        if option.icon:
             option.features |= option.HasDecoration
 
         # Store original height
