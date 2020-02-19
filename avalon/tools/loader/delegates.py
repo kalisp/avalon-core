@@ -345,34 +345,34 @@ class AssetDelegate(QtWidgets.QStyledItemDelegate):
             )
 
         text = index.data(QtCore.Qt.DisplayRole)
-        # if text:
-        #     option.text = text
-        #     if not option.state & QtWidgets.QStyle.State_Enabled:
-        #         color_group = QtGui.QPalette.Disabled
-        #     elif not option.state & QtWidgets.QStyle.State_Active:
-        #         color_group = QtGui.QPalette.Inactive
-        #     else:
-        #         color_group = QtGui.QPalette.Normal
-        #
-        #     if option.state & QtWidgets.QStyle.State_Selected:
-        #         painter.setPen(option.palette.color(
-        #             color_group, QtGui.QPalette.HighlightedText
-        #         ))
-        #     else:
-        #         painter.setPen(option.palette.color(
-        #             color_group, QtGui.QPalette.Text
-        #         ))
-        #
-        #     if option.state & QtWidgets.QStyle.State_Editing:
-        #         painter.setPen(option.palette.color(
-        #             color_group, QtGui.QPalette.HighlightedText
-        #         ))
-        #         painter.drawRect(text_rect.adjusted(0, 0, -1, -1))
-        #
-        #     self.viewItemDrawText(painter, option, text_rect)
-        painter.drawText(
-            text_rect, QtCore.Qt.AlignVCenter, text
-        )
+        if text:
+            option.text = text
+            if not option.state & QtWidgets.QStyle.State_Enabled:
+                color_group = QtGui.QPalette.Disabled
+            elif not option.state & QtWidgets.QStyle.State_Active:
+                color_group = QtGui.QPalette.Inactive
+            else:
+                color_group = QtGui.QPalette.Normal
+
+            if option.state & QtWidgets.QStyle.State_Selected:
+                painter.setPen(option.palette.color(
+                    color_group, QtGui.QPalette.HighlightedText
+                ))
+            else:
+                painter.setPen(option.palette.color(
+                    color_group, QtGui.QPalette.Text
+                ))
+
+            if option.state & QtWidgets.QStyle.State_Editing:
+                painter.setPen(option.palette.color(
+                    color_group, QtGui.QPalette.HighlightedText
+                ))
+                painter.drawRect(text_rect.adjusted(0, 0, -1, -1))
+
+            self.viewItemDrawText(painter, option, text_rect)
+        # painter.drawText(
+        #     text_rect, QtCore.Qt.AlignVCenter, text
+        # )
 
         if option.state & QtWidgets.QStyle.State_HasFocus:
             rect_focus_opt = QtWidgets.QStyleOptionFocusRect()
