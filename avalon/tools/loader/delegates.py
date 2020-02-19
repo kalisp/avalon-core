@@ -139,7 +139,7 @@ class AssetDelegate(QtWidgets.QStyledItemDelegate):
             option.displayAlignment
         ))
 
-        text_layout = QtGui.Qtext_layout()
+        text_layout = QtGui.QTextLayout()
         text_layout.setTextOption(text_option)
         text_layout.setFont(option.font)
         text_layout.setText(option.text)
@@ -149,7 +149,9 @@ class AssetDelegate(QtWidgets.QStyledItemDelegate):
         elided_text = ""
         height = float(0)
         width = float(0)
-        elidedIndex = -1
+        elided_index = -1
+
+        font_metrics = QtGui.QFontMetrics(option.font)
 
         line_count = text_layout.lineCount()
         for j_idx in range(line_count):
@@ -159,103 +161,56 @@ class AssetDelegate(QtWidgets.QStyledItemDelegate):
                 if ((nextLine.y() + nextLine.height()) > text_rect.height()):
                     start = line.textStart()
                     length = line.textLength() + nextLine.textLength()
-                    const QStackTextEngine engine(
-                        text_layout.text().mid(start, length), option.font
-                    )
-                    elidedText = engine.elidedText(
-                        option.textElideMode, text_rect.width()
+                    elided_text = font_metrics.elidedText(
+                        text_layout.text().mid(start, length),
+                        option.textElideMode,
+                        text_rect.width()
                     )
                     height += line.height()
                     width = text_rect.width()
-                    elidedIndex = j_idx
+                    elided_index = j_idx
                     break
 
             if (line.naturalTextWidth() > text_rect.width()):
                 start = line.textStart()
                 length = line.textLength()
-                engine = QtGui.QFontMetrics(option.font)
-                const QStackTextEngine engine(
-                    text_layout.text().mid(start, length), option.font
-                )
-                elidedText = engine.elidedText(
-                    option.textElideMode, text_rect.width()
+                elided_text = font_metrics.elidedText(
+                    text_layout.text().mid(start, length),
+                    option.textElideMode,
+                    text_rect.width()
                 )
                 height += line.height()
                 width = text_rect.width()
-                elidedIndex = j_idx
+                elided_index = j_idx
                 break
 
             width = max(width, line.width())
             height += line.height()
 
-        # const int textMargin = proxyStyle->pixelMetric(QStyle::PM_FocusFrameHMargin, 0, widget) + 1;
-        #
-        # QRect textRect = rect.adjusted(textMargin, 0, -textMargin, 0); // remove width padding
-        # const bool wrapText = option->features & QStyleOptionViewItemV2::WrapText;
-        # QTextOption textOption;
-        # textOption.setWrapMode(wrapText ? QTextOption::WordWrap : QTextOption::ManualWrap);
-        # textOption.setTextDirection(option->direction);
-        # textOption.setAlignment(QStyle::visualAlignment(option->direction, option->displayAlignment));
-        # Qtext_layout text_layout;
-        # text_layout.setTextOption(textOption);
-        # text_layout.setFont(option->font);
-        # text_layout.setText(option->text);
-        #
-        # viewItemtextLayout(text_layout, textRect.width());
-        #
-        # QString elidedText;
-        # qreal height = 0;
-        # qreal width = 0;
-        # int elidedIndex = -1;
-        # const int lineCount = text_layout.lineCount();
-        # for (int j = 0; j < lineCount; ++j) {
-        #     const QTextLine line = text_layout.lineAt(j);
-        #     if (j + 1 <= lineCount - 1) {
-        #         const QTextLine nextLine = text_layout.lineAt(j + 1);
-        #         if ((nextLine.y() + nextLine.height()) > textRect.height()) {
-        #             int start = line.textStart();
-        #             int length = line.textLength() + nextLine.textLength();
-        #             const QStackTextEngine engine(text_layout.text().mid(start, length), option->font);
-        #             elidedText = engine.elidedText(option->textElideMode, textRect.width());
-        #             height += line.height();
-        #             width = textRect.width();
-        #             elidedIndex = j;
-        #             break;
-        #         }
-        #     }
-        #     if (line.naturalTextWidth() > textRect.width()) {
-        #         int start = line.textStart();
-        #         int length = line.textLength();
-        #         const QStackTextEngine engine(text_layout.text().mid(start, length), option->font);
-        #         elidedText = engine.elidedText(option->textElideMode, textRect.width());
-        #         height += line.height();
-        #         width = textRect.width();
-        #         elidedIndex = j;
-        #         break;
-        #     }
-        #     width = qMax<qreal>(width, line.width());
-        #     height += line.height();
-        # }
-        #
-        # const QRect layoutRect = QStyle::alignedRect(option->direction, option->displayAlignment,
-        #                                             QSize(int(width), int(height)), textRect);
-        # const QPointF position = layoutRect.topLeft();
-        # for (int i = 0; i < lineCount; ++i) {
-        #     const QTextLine line = text_layout.lineAt(i);
-        #     if (i == elidedIndex) {
-        #         qreal x = position.x() + line.x();
-        #         qreal y = position.y() + line.y() + line.ascent();
-        #         p->save();
-        #         p->setFont(option->font);
-        #         p->drawText(QPointF(x, y), elidedText);
-        #         p->restore();
-        #         break;
-        #     }
-        #     line.draw(p, position);
-        # }
+        layout_rect = _style.alignedRect(
+            option.direction, option.displayAlignment,
+            QtCore.QSize(int(width), int(height)), text_rect
+        )
+        position = layout_rect.topLeft()
+
+        for idx in range(line_count):
+            text_layout.lineAt(idx)
+            if idx == elided_index:
+                pos_x = position.x() + line.x()
+                pos_y = position.y() + line.y() + line.ascent()
+                painter.save()
+                painter.setFont(option.font)
+                painter.drawText(
+                    QtCore.QPointF(pos_x, pos_y),
+                    elided_text
+                )
+                painter.restore()
+                break
+
+            line.draw(painter, position)
 
     def viewItemtextLayout(
-        text_layout, line_width, max_height=-1, last_visible_line=None
+        self, text_layout, line_width, max_height=-1, last_visible_line=None
     ):
         if last_visible_line:
             last_visible_line = -1
@@ -263,12 +218,12 @@ class AssetDelegate(QtWidgets.QStyledItemDelegate):
         height = float(0)
         widthUsed = float(0)
         text_layout.beginLayout()
-        i = 0
+        idx = 0
         while True:
             line = text_layout.createLine()
             if not line.isValid():
                 break
-            line.setline_width(line_width)
+            line.setLineWidth(line_width)
             line.setPosition(QtCore.QPointF(0, height))
             height += line.height()
             widthUsed = max(widthUsed, line.naturalTextWidth())
@@ -279,17 +234,19 @@ class AssetDelegate(QtWidgets.QStyledItemDelegate):
             ):
                 nextLine = text_layout.createLine()
                 if nextLine.isValid():
-                    last_visible_line = i
+                    last_visible_line = idx
                 else:
                     last_visible_line = -1
                 break
 
-            i += 1
+            idx += 1
 
         text_layout.endLayout()
         return QtCore.QSizeF(widthUsed, height)
 
     def paint(self, painter, option, index):
+        painter.save()
+
         widget = option.widget
         _style = widget.style()
         # CE_ItemViewItem
@@ -300,7 +257,6 @@ class AssetDelegate(QtWidgets.QStyledItemDelegate):
 
         origin_height = option.rect.height()
         item_height = origin_height - self.bar_height
-        option.rect.setHeight(item_height)
 
         check_rect = _style.subElementRect(
             _style.SE_ItemViewItemCheckIndicator, option, widget
@@ -311,8 +267,10 @@ class AssetDelegate(QtWidgets.QStyledItemDelegate):
         text_rect = _style.subElementRect(
             _style.SE_ItemViewItemText, option, widget
         )
+        text_rect.setHeight(item_height)
+
         subset_colors_rect = QtCore.QRect(
-            text_rect.left(), origin_height - self.bar_height,
+            text_rect.left(), item_height,
             text_rect.width(), self.bar_height
         )
 
@@ -385,212 +343,66 @@ class AssetDelegate(QtWidgets.QStyledItemDelegate):
                 icon_mode,
                 icon_state
             )
-        # // draw the icon
-        # QIcon::Mode mode = QIcon::Normal;
-        # if (!(vopt->state & QStyle::State_Enabled))
-        #     mode = QIcon::Disabled;
-        # else if (vopt->state & QStyle::State_Selected)
-        #     mode = QIcon::Selected;
-        # QIcon::State state = vopt->state & QStyle::State_Open ? QIcon::On : QIcon::Off;
-        # vopt->icon.paint(p, iconRect, vopt->decorationAlignment, mode, state);
 
         text = index.data(QtCore.Qt.DisplayRole)
-        if text:
-            if not option.state & QtWidgets.QStyle.State_Enabled:
-                color_group = QtGui.QPalette.Disabled
-            elif not option.state & QtWidgets.QStyle.State_Active:
-                color_group = QtGui.QPalette.Inactive
-            else:
+        # if text:
+        #     option.text = text
+        #     if not option.state & QtWidgets.QStyle.State_Enabled:
+        #         color_group = QtGui.QPalette.Disabled
+        #     elif not option.state & QtWidgets.QStyle.State_Active:
+        #         color_group = QtGui.QPalette.Inactive
+        #     else:
+        #         color_group = QtGui.QPalette.Normal
+        #
+        #     if option.state & QtWidgets.QStyle.State_Selected:
+        #         painter.setPen(option.palette.color(
+        #             color_group, QtGui.QPalette.HighlightedText
+        #         ))
+        #     else:
+        #         painter.setPen(option.palette.color(
+        #             color_group, QtGui.QPalette.Text
+        #         ))
+        #
+        #     if option.state & QtWidgets.QStyle.State_Editing:
+        #         painter.setPen(option.palette.color(
+        #             color_group, QtGui.QPalette.HighlightedText
+        #         ))
+        #         painter.drawRect(text_rect.adjusted(0, 0, -1, -1))
+        #
+        #     self.viewItemDrawText(painter, option, text_rect)
+        painter.drawText(
+            text_rect, QtCore.Qt.AlignVCenter, text
+        )
+
+        if option.state & QtWidgets.QStyle.State_HasFocus:
+            rect_focus_opt = QtWidgets.QStyleOptionFocusRect()
+            rect_focus_opt.state = option.state
+            rect_focus_opt.direction = option.direction
+            rect_focus_opt.rect = option.rect
+            rect_focus_opt.fontMetrics = option.fontMetrics
+            rect_focus_opt.palette = option.palette
+
+            rect_focus_opt.state |= _style.State_KeyboardFocusChange
+            rect_focus_opt.state |= _style.State_Item
+
+            if (option.state & QtGui.QStyle.State_Enabled):
                 color_group = QtGui.QPalette.Normal
-
-            if option.state & QtWidgets.QStyle.State_Selected:
-                painter.setPen(option.palette.color(
-                    color_group, QtGui.QPalette.HighlightedText
-                ))
             else:
-                painter.setPen(option.palette.color(
-                    color_group, QtGui.QPalette.Text
-                ))
+                color_group = QtGui.QPalette.Disabled
 
-            if option.state & QtWidgets.QStyle.State_Editing:
-                painter.setPen(option.palette.color(
-                    color_group, QtGui.QPalette.HighlightedText
-                ))
-                painter.drawRect(text_rect.adjusted(0, 0, -1, -1))
-
-            self.viewItemDrawText(painter, option, text_rect)
-            # painter.drawText(
-            #     text_rect, QtCore.Qt.AlignVCenter, text
-            # )
-
-        # // draw the text
-        # if (!vopt->text.isEmpty()) {
-        #     QPalette::ColorGroup cg = vopt->state & QStyle::State_Enabled
-        #                         ? QPalette::Normal : QPalette::Disabled;
-        #     if (cg == QPalette::Normal && !(vopt->state & QStyle::State_Active))
-        #       cg = QPalette::Inactive;
-        #
-        #     if (vopt->state & QStyle::State_Selected) {
-        #       p->setPen(vopt->palette.color(cg, QPalette::HighlightedText));
-        #     } else {
-        #      p->setPen(vopt->palette.color(cg, QPalette::Text));
-        #     }
-        #     if (vopt->state & QStyle::State_Editing) {
-        #       p->setPen(vopt->palette.color(cg, QPalette::Text));
-        #       p->drawRect(textRect.adjusted(0, 0, -1, -1));
-        #     }
-        #
-        #     d->viewItemDrawText(p, vopt, textRect);
-        # }
-        #
-        # // draw the focus rect
-        # if (vopt->state & QStyle::State_HasFocus) {
-        #     QStyleOptionFocusRect o;
-        #     o.QStyleOption::operator=(*vopt);
-        #     o.rect = proxy()->subElementRect(SE_ItemViewItemFocusRect, vopt, widget);
-        #     o.state |= QStyle::State_KeyboardFocusChange;
-        #     o.state |= QStyle::State_Item;
-        #     QPalette::ColorGroup cg = (vopt->state & QStyle::State_Enabled)
-        #                 ? QPalette::Normal : QPalette::Disabled;
-        #     o.backgroundColor = vopt->palette.color(cg, (vopt->state & QStyle::State_Selected)
-        #                                ? QPalette::Highlight : QPalette::Window);
-        #     proxy()->drawPrimitive(QStyle::PE_FrameFocusRect, &o, p, widget);
-        # }
-        #
-        # p->restore();
-
-        return
-
-        painter.save()
-
-        item_rect = QtCore.QRect(option.rect)
-        item_rect.setHeight(option.rect.height() - self.bar_height)
-
-        subset_colors = index.data(AssetModel.subsetColorsRole)
-        subset_colors_width = 0
-        if subset_colors:
-            subset_colors_width = option.rect.width() / len(subset_colors)
-
-        subset_rects = []
-        counter = 0
-        for subset_c in subset_colors:
-            new_color = None
-            new_rect = None
-            if subset_c:
-                new_color = QtGui.QColor(*subset_c)
-
-                new_rect = QtCore.QRect(
-                    option.rect.left() + (counter * subset_colors_width),
-                    option.rect.top() + (option.rect.height()-self.bar_height),
-                    subset_colors_width,
-                    self.bar_height
-                )
-            subset_rects.append((new_color, new_rect))
-            counter += 1
-
-        # Background
-        bg_color = QtGui.QColor(60, 60, 60)
-        if option.state & QtWidgets.QStyle.State_Selected:
-            if len(subset_colors) == 0:
-                item_rect.setTop(item_rect.top() + (self.bar_height / 2))
-            if option.state & QtWidgets.QStyle.State_MouseOver:
-                bg_color.setRgb(70, 70, 70)
-        else:
-            item_rect.setTop(item_rect.top() + (self.bar_height / 2))
-            if option.state & QtWidgets.QStyle.State_MouseOver:
-                bg_color.setAlpha(100)
+            if option.state & QtGui.QStyle.State_Selected:
+                _pallete = QtGui.QPalette.Highlight
             else:
-                bg_color.setAlpha(0)
-
-        # # -- When not needed to do a rounded corners (easier and without painter restore):
-        # painter.fillRect(
-        #     item_rect,
-        #     QtGui.QBrush(bg_color)
-        # )
-        pen = painter.pen()
-        pen.setStyle(QtCore.Qt.NoPen)
-        pen.setWidth(0)
-        painter.setPen(pen)
-        painter.setBrush(QtGui.QBrush(bg_color))
-        painter.drawRoundedRect(option.rect, 3, 3)
-
-        if option.state & QtWidgets.QStyle.State_Selected:
-            for color, subset_rect in subset_rects:
-                if not color or not subset_rect:
-                    continue
-                painter.fillRect(subset_rect, QtGui.QBrush(color))
-
-        painter.restore()
-        painter.save()
-
-        # Icon
-        icon_index = index.model().index(
-            index.row(), index.column(), index.parent()
-        )
-        # - Default icon_rect if not icon
-        icon_rect = QtCore.QRect(
-            item_rect.left(),
-            item_rect.top(),
-            # To make sure it's same size all the time
-            option.rect.height() - self.bar_height,
-            option.rect.height() - self.bar_height
-        )
-        icon = index.model().data(icon_index, QtCore.Qt.DecorationRole)
-
-        if icon:
-            margin = 0
-            mode = QtGui.QIcon.Normal
-
-            if not (option.state & QtWidgets.QStyle.State_Enabled):
-                mode = QtGui.QIcon.Disabled
-            elif option.state & QtWidgets.QStyle.State_Selected:
-                mode = QtGui.QIcon.Selected
-
-            if isinstance(icon, QtGui.QPixmap):
-                icon = QtGui.QIcon(icon)
-                option.decorationSize = icon.size() / icon.devicePixelRatio()
-
-            elif isinstance(icon, QtGui.QColor):
-                pixmap = QtGui.QPixmap(option.decorationSize)
-                pixmap.fill(icon)
-                icon = QtGui.QIcon(pixmap)
-
-            elif isinstance(icon, QtGui.QImage):
-                icon = QtGui.QIcon(QtGui.QPixmap.fromImage(icon))
-                option.decorationSize = icon.size() / icon.devicePixelRatio()
-
-            elif isinstance(icon, QtGui.QIcon):
-                state = QtGui.QIcon.Off
-                if option.state & QtWidgets.QStyle.State_Open:
-                    state = QtGui.QIcon.On
-                actualSize = option.icon.actualSize(
-                    option.decorationSize, mode, state
-                )
-                option.decorationSize = QtCore.QSize(
-                    min(option.decorationSize.width(), actualSize.width()),
-                    min(option.decorationSize.height(), actualSize.height())
-                )
-
-            state = QtGui.QIcon.Off
-            if option.state & QtWidgets.QStyle.State_Open:
-                state = QtGui.QIcon.On
-
-            icon.paint(
-                painter, icon_rect,
-                QtCore.Qt.AlignLeft , mode, state
+                _pallete = QtGui.QPalette.Window
+            rect_focus_opt.backgroundColor = option.palette.color(
+                color_group, _pallete
             )
 
-        # Text
-        text_rect = QtCore.QRect(
-            icon_rect.left() + icon_rect.width() + 2,
-            item_rect.top(),
-            item_rect.width(),
-            item_rect.height()
-        )
-
-        painter.drawText(
-            text_rect, QtCore.Qt.AlignVCenter,
-            index.data(QtCore.Qt.DisplayRole)
-        )
+            _style.drawPrimitive(
+                QtGui.QStyle.PE_FrameFocusRect,
+                rect_focus_opt,
+                painter,
+                widget
+            )
 
         painter.restore()
