@@ -103,8 +103,7 @@ class PrettyTimeDelegate(QtWidgets.QStyledItemDelegate):
         return pretty_timestamp(value)
 
 
-        # class AssetDelegate(QtWidgets.QItemDelegate):
-class AssetDelegate(QtWidgets.QStyledItemDelegate):
+class AssetDelegate(QtWidgets.QItemDelegate):
     bar_height = 3
 
     def sizeHint(self, option, index):
@@ -128,8 +127,6 @@ class AssetDelegate(QtWidgets.QStyledItemDelegate):
             wrap_text = QtGui.QTextOption.WordWrap
         else:
             wrap_text = QtGui.QTextOption.ManualWrap
-
-        view_options = widget.viewOptions()
 
         text_option = QtGui.QTextOption()
         text_option.setWrapMode(wrap_text)
@@ -216,7 +213,7 @@ class AssetDelegate(QtWidgets.QStyledItemDelegate):
             last_visible_line = -1
         # These were real (qreal)
         height = float(0)
-        widthUsed = float(0)
+        width_used = float(0)
         text_layout.beginLayout()
         idx = 0
         while True:
@@ -226,7 +223,7 @@ class AssetDelegate(QtWidgets.QStyledItemDelegate):
             line.setLineWidth(line_width)
             line.setPosition(QtCore.QPointF(0, height))
             height += line.height()
-            widthUsed = max(widthUsed, line.naturalTextWidth())
+            width_used = max(width_used, line.naturalTextWidth())
             if (
                 max_height > 0 and
                 last_visible_line and
@@ -242,22 +239,68 @@ class AssetDelegate(QtWidgets.QStyledItemDelegate):
             idx += 1
 
         text_layout.endLayout()
-        return QtCore.QSizeF(widthUsed, height)
+
+        return QtCore.QSizeF(width_used, height)
 
     def paint(self, painter, option, index):
         painter.save()
+        painter.setClipRect(option.rect)
 
         widget = option.widget
         _style = widget.style()
-        # CE_ItemViewItem
-        # PE_PanelItemViewItem
+
+        # Draw background
         _style.drawPrimitive(
             _style.PE_PanelItemViewItem, option, painter, widget
         )
 
+        # Set icon to option before setting rectangles
+        icon_index = index.model().index(
+            index.row(), index.column(), index.parent()
+        )
+        icon = index.model().data(icon_index, QtCore.Qt.DecorationRole)
+
+        icon_mode = QtGui.QIcon.Normal
+        if not (option.state & QtWidgets.QStyle.State_Enabled):
+            icon_mode = QtGui.QIcon.Disabled
+        elif option.state & QtWidgets.QStyle.State_Selected:
+            icon_mode = QtGui.QIcon.Selected
+
+        if option.state & QtWidgets.QStyle.State_Open:
+            icon_state = QtGui.QIcon.On
+        else:
+            icon_state = QtGui.QIcon.Off
+
+        if isinstance(icon, QtGui.QPixmap):
+            icon = QtGui.QIcon(icon)
+            option.decorationSize = icon.size() / icon.devicePixelRatio()
+
+        elif isinstance(icon, QtGui.QColor):
+            pixmap = QtGui.QPixmap(option.decorationSize)
+            pixmap.fill(icon)
+            icon = QtGui.QIcon(pixmap)
+
+        elif isinstance(icon, QtGui.QImage):
+            icon = QtGui.QIcon(QtGui.QPixmap.fromImage(icon))
+            option.decorationSize = icon.size() / icon.devicePixelRatio()
+
+        elif isinstance(icon, QtGui.QIcon):
+            actualSize = icon.actualSize(
+                option.decorationSize, icon_mode, icon_state
+            )
+            option.decorationSize = QtCore.QSize(
+                min(option.decorationSize.width(), actualSize.width()),
+                min(option.decorationSize.height(), actualSize.height())
+            )
+        option.icon = icon
+        if icon:
+            option.features |= option.HasDecoration
+
+        # Store original height
         origin_height = option.rect.height()
         item_height = origin_height - self.bar_height
 
+        # Get rectangles
         check_rect = _style.subElementRect(
             _style.SE_ItemViewItemCheckIndicator, option, widget
         )
@@ -267,82 +310,64 @@ class AssetDelegate(QtWidgets.QStyledItemDelegate):
         text_rect = _style.subElementRect(
             _style.SE_ItemViewItemText, option, widget
         )
-        text_rect.setHeight(item_height)
 
-        subset_colors_rect = QtCore.QRect(
-            text_rect.left(), item_height,
-            text_rect.width(), self.bar_height
-        )
+        subset_colors = index.data(AssetModel.subsetColorsRole)
+        subset_colors_width = 0
+        if subset_colors:
+            subset_colors_width = option.rect.width() / len(subset_colors)
+
+        subset_rects = []
+        counter = 0
+        for subset_c in subset_colors:
+            new_color = None
+            new_rect = None
+            if subset_c:
+                new_color = QtGui.QColor(*subset_c)
+
+                new_rect = QtCore.QRect(
+                    option.rect.left() + (counter * subset_colors_width),
+                    option.rect.top() + (
+                        option.rect.height() - self.bar_height
+                    ),
+                    subset_colors_width,
+                    self.bar_height
+                )
+            subset_rects.append((new_color, new_rect))
+            counter += 1
+
+        if subset_rects and option.state & QtWidgets.QStyle.State_Selected:
+            text_rect.setHeight(item_height)
+            for color, subset_rect in subset_rects:
+                if not color or not subset_rect:
+                    continue
+                painter.fillRect(subset_rect, QtGui.QBrush(color))
 
         if option.features & option.HasCheckIndicator:
-            pass
-        # if (vopt->features & QStyleOptionViewItemV2::HasCheckIndicator) {
-        #     QStyleOptionViewItemV4 option(*vopt);
-        #     option.rect = checkRect;
-        #     option.state = option.state & ~QStyle::State_HasFocus;
-        #
-        #     switch (vopt->checkState) {
-        #     case Qt::Unchecked:
-        #         option.state |= QStyle::State_Off;
-        #         break;
-        #     case Qt::PartiallyChecked:
-        #         option.state |= QStyle::State_NoChange;
-        #         break;
-        #     case Qt::Checked:
-        #         option.state |= QStyle::State_On;
-        #         break;
-        #     }
-        #     proxy()->drawPrimitive(QStyle::PE_IndicatorViewItemCheck, &option, p, widget);
-        # }
+            option.rect = check_rect
+            option.state = option.state & _style.Stete_HasFocus
 
-        icon_index = index.model().index(
-            index.row(), index.column(), index.parent()
-        )
-        icon = index.model().data(icon_index, QtCore.Qt.DecorationRole)
+            if option.checkState is QtCore.Qt.Unchecked:
+                option.state |= _style.State_Off
+            elif option.checkState is QtCore.Qt.PartiallyChecked:
+                option.state |= _style.State_NoChange
+            elif option.checkState is QtCore.Qt.Checked:
+                option.state |= _style.State_On
 
-        if icon:
-            icon_mode = QtGui.QIcon.Normal
-
-            if not (option.state & QtWidgets.QStyle.State_Enabled):
-                icon_mode = QtGui.QIcon.Disabled
-            elif option.state & QtWidgets.QStyle.State_Selected:
-                icon_mode = QtGui.QIcon.Selected
-
-            if option.state & QtWidgets.QStyle.State_Open:
-                icon_state = QtGui.QIcon.On
-            else:
-                icon_state = QtGui.QIcon.Off
-
-            if isinstance(icon, QtGui.QPixmap):
-                icon = QtGui.QIcon(icon)
-                option.decorationSize = icon.size() / icon.devicePixelRatio()
-
-            elif isinstance(icon, QtGui.QColor):
-                pixmap = QtGui.QPixmap(option.decorationSize)
-                pixmap.fill(icon)
-                icon = QtGui.QIcon(pixmap)
-
-            elif isinstance(icon, QtGui.QImage):
-                icon = QtGui.QIcon(QtGui.QPixmap.fromImage(icon))
-                option.decorationSize = icon.size() / icon.devicePixelRatio()
-
-            elif isinstance(icon, QtGui.QIcon):
-                actualSize = option.icon.actualSize(
-                    option.decorationSize, icon_mode, icon_state
-                )
-                option.decorationSize = QtCore.QSize(
-                    min(option.decorationSize.width(), actualSize.width()),
-                    min(option.decorationSize.height(), actualSize.height())
-                )
-
-            view_options = widget.viewOptions()
-            icon.paint(
+            _style.drawPrimitive(
+                _style.PE_IndicatorViewItemCheck,
+                option,
                 painter,
-                icon_rect,
-                view_options.decorationAlignment,
-                icon_mode,
-                icon_state
+                widget
             )
+
+        view_options = widget.viewOptions()
+        option.icon.paint(
+            painter,
+            icon_rect,
+            view_options.decorationAlignment,
+            icon_mode,
+            icon_state
+        )
 
         text = index.data(QtCore.Qt.DisplayRole)
         if text:
@@ -370,11 +395,8 @@ class AssetDelegate(QtWidgets.QStyledItemDelegate):
                 painter.drawRect(text_rect.adjusted(0, 0, -1, -1))
 
             self.viewItemDrawText(painter, option, text_rect)
-        # painter.drawText(
-        #     text_rect, QtCore.Qt.AlignVCenter, text
-        # )
 
-        if option.state & QtWidgets.QStyle.State_HasFocus:
+        if option.state & _style.State_HasFocus:
             rect_focus_opt = QtWidgets.QStyleOptionFocusRect()
             rect_focus_opt.state = option.state
             rect_focus_opt.direction = option.direction
@@ -385,12 +407,12 @@ class AssetDelegate(QtWidgets.QStyledItemDelegate):
             rect_focus_opt.state |= _style.State_KeyboardFocusChange
             rect_focus_opt.state |= _style.State_Item
 
-            if (option.state & QtGui.QStyle.State_Enabled):
+            if (option.state & _style.State_Enabled):
                 color_group = QtGui.QPalette.Normal
             else:
                 color_group = QtGui.QPalette.Disabled
 
-            if option.state & QtGui.QStyle.State_Selected:
+            if option.state & _style.State_Selected:
                 _pallete = QtGui.QPalette.Highlight
             else:
                 _pallete = QtGui.QPalette.Window
@@ -399,7 +421,7 @@ class AssetDelegate(QtWidgets.QStyledItemDelegate):
             )
 
             _style.drawPrimitive(
-                QtGui.QStyle.PE_FrameFocusRect,
+                _style.PE_FrameFocusRect,
                 rect_focus_opt,
                 painter,
                 widget
