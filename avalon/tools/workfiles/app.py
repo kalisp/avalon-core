@@ -296,8 +296,9 @@ class TasksWidget(QtWidgets.QWidget):
         self._last_selected_task = None
 
     def set_asset(self, asset):
-
-        assets = [asset] if asset else []
+        if asset is None:
+            # Asset deselected
+            return
 
         # Try and preserve the last selected task and reselect it
         # after switching assets. If there's no currently selected
@@ -726,7 +727,7 @@ class FilesWidget(QtWidgets.QWidget):
                 continue
 
             modified = index.data(role)
-            if modified > highest:
+            if modified is not None and modified > highest:
                 highest_index = index
                 highest = modified
 
@@ -832,7 +833,7 @@ class Window(QtWidgets.QMainWindow):
         self._on_task_changed()
 
     def _on_asset_changed(self):
-        asset = self.widgets["assets"].get_active_asset_document()
+        asset = self.widgets["assets"].get_selected_assets() or None
 
         if not asset:
             # Force disable the other widgets if no
@@ -840,13 +841,16 @@ class Window(QtWidgets.QMainWindow):
             self.widgets["tasks"].setEnabled(False)
             self.widgets["files"].setEnabled(False)
         else:
+            asset = asset[0]
             self.widgets["tasks"].setEnabled(True)
 
         self.widgets["tasks"].set_asset(asset)
 
     def _on_task_changed(self):
 
-        asset = self.widgets["assets"].get_active_asset_document()
+        asset = self.widgets["assets"].get_selected_assets() or None
+        if asset is not None:
+            asset = asset[0]
         task = self.widgets["tasks"].get_current_task()
 
         self.widgets["tasks"].setEnabled(bool(asset))
