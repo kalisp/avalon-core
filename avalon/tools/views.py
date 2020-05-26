@@ -26,6 +26,7 @@ class AssetsView(DeselectableTreeView):
         self.setIndentation(15)
         self.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.setHeaderHidden(True)
+        self.setObjectName("AssetsView")
 
     def mousePressEvent(self, event):
         index = self.indexAt(event.pos())
