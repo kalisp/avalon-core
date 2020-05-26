@@ -1,5 +1,5 @@
 from ... import io, style
-from ...vendor.Qt import QtCore, QtGui
+from ...vendor.Qt import QtCore
 from ...vendor import qtawesome
 
 from ..models import TreeModel, Item
@@ -215,7 +215,6 @@ class SubsetsModel(TreeModel):
 
         # Prepare data if is selected more than one asset
         process_only_single_asset = True
-        merge_subsets = False
         if len(parent_filter) >= 2:
             process_only_single_asset = False
             all_subset_names = []
@@ -228,8 +227,6 @@ class SubsetsModel(TreeModel):
 
                 name = subset["name"]
                 if name in all_subset_names:
-                    # process_only_single_asset = False
-                    merge_subsets = True
                     if name not in multiple_asset_names:
                         multiple_asset_names.append(name)
                 else:
@@ -296,7 +293,6 @@ class SubsetsModel(TreeModel):
                     single_asset_subsets.append(data)
 
             color_count = len(self.merged_subset_colors)
-            merged_names = {}
             subset_counter = 0
             total = len(multi_asset_subsets)
             str_order_temp = "%0{}d".format(len(str(total)))
@@ -332,7 +328,7 @@ class SubsetsModel(TreeModel):
 
                 merge_group_index = self.createIndex(0, 0, merge_group)
 
-                for asset_id, asset_subset_data in per_asset_data.items():
+                for asset_subset_data in per_asset_data.values():
                     last_version = asset_subset_data["last_version"]
                     data = asset_subset_data["data"]
 
@@ -387,7 +383,6 @@ class SubsetsModel(TreeModel):
         self.endResetModel()
 
     def data(self, index, role):
-
         if not index.isValid():
             return
 

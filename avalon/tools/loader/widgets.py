@@ -151,7 +151,7 @@ class SubsetWidget(QtWidgets.QWidget):
                 continue
 
             elif item.get("isMerged"):
-                # TODO use `for` loop of index's rowCount instead of `while` loop
+                # TODO use `for` loop of index's rowCount instead of `while`
                 idx = 0
                 while idx < 2000:
                     child_index = row_index.child(idx, 0)

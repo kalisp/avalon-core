@@ -3,16 +3,16 @@ from datetime import datetime
 import logging
 import numbers
 
-from ...vendor import Qt
+from .models import TreeModel, AssetModel
+
+from .. import io
 from ..vendor.Qt import QtWidgets, QtGui, QtCore
+
+from ..vendor import Qt
 if Qt.__binding__ == "PySide":
     from PySide.QtGui import QStyleOptionViewItemV4
 elif Qt.__binding__ == "PyQt4":
     from PyQt4.QtGui import QStyleOptionViewItemV4
-
-from .. import io
-
-from .models import TreeModel, AssetModel
 
 log = logging.getLogger(__name__)
 
