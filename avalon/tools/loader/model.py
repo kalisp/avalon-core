@@ -192,19 +192,20 @@ class SubsetsModel(TreeModel):
             if result:
                 active_groups.extend(result)
 
-        parent_filter = [{"parent": asset_id} for asset_id in self._asset_ids]
-        filtered_subsets = [
-            s for s in io.find({"type": "subset", "$or": parent_filter})
-        ]
+        subset_docs = list(io.find({
+            "type": "subset",
+            "parent": {"$in": self._asset_ids}
+        }))
 
-        asset_entities = {}
-        for asset_id in self._asset_ids:
-            asset_ent = io.find_one({"_id": asset_id})
-            asset_entities[asset_id] = asset_ent
+        asset_docs = io.find({"_id": {"$in": self._asset_ids}})
+        asset_docs_by_id = {
+            asset_doc["_id"]: asset_doc
+            for asset_doc in asset_docs
+        }
 
         # Collect last versions
         last_versions = {}
-        for subset in filtered_subsets:
+        for subset in subset_docs:
             last_version = io.find_one({
                 "type": "version",
                 "parent": subset["_id"]
@@ -215,12 +216,12 @@ class SubsetsModel(TreeModel):
 
         # Prepare data if is selected more than one asset
         process_only_single_asset = True
-        if len(parent_filter) >= 2:
+        if len(self._asset_ids) >= 2:
             process_only_single_asset = False
             all_subset_names = []
             multiple_asset_names = []
 
-            for subset in filtered_subsets:
+            for subset in subset_docs:
                 # No published version for the subset
                 if not last_versions[subset["_id"]]:
                     continue
@@ -259,21 +260,21 @@ class SubsetsModel(TreeModel):
                     self.add_child(group)
 
             row = len(group_items)
-            single_asset_subsets = filtered_subsets
+            single_asset_subsets = subset_docs
 
         # When multiple assets are selected
         else:
             single_asset_subsets = []
             multi_asset_subsets = {}
 
-            for subset in filtered_subsets:
+            for subset in subset_docs:
                 last_version = last_versions[subset["_id"]]
                 if not last_version:
                     continue
 
                 data = subset.copy()
                 name = data["name"]
-                asset_name = asset_entities[data["parent"]]["name"]
+                asset_name = asset_docs_by_id[data["parent"]]["name"]
 
                 data["subset"] = name
                 data["asset"] = asset_name
