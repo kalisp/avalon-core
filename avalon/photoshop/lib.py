@@ -68,8 +68,8 @@ def Dispatch(application):
     Args:
         application (str): Application to dispatch.
     """
-    from win32com.client import Dispatch
-    return Dispatch(application)
+    from win32com.client.gencache import EnsureDispatch
+    return EnsureDispatch(application)
 
 
 def app():
