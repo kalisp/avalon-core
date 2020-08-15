@@ -19,6 +19,7 @@ import importlib
 from collections import OrderedDict
 
 from . import (
+    HostContext,
     io,
     lib,
 
@@ -152,14 +153,8 @@ def uninstall():
 
 
 def is_installed():
-    """Return state of installation
-
-    Returns:
-        True if installed, False otherwise
-
-    """
-
-    return self._is_installed
+    # host context function
+    pass
 
 
 def publish():
@@ -728,33 +723,13 @@ class TemplateResolver(ThumbnailResolver):
 
 
 class BinaryThumbnail(ThumbnailResolver):
-
     def process(self, thumbnail_entity, thumbnail_type):
         return thumbnail_entity["data"].get("binary_data")
 
 
 def discover(superclass):
-    """Find and return subclasses of `superclass`"""
-
-    registered = _registered_plugins.get(superclass, list())
-    plugins = dict()
-
-    # Include plug-ins from registered paths
-    for path in _registered_plugin_paths.get(superclass, list()):
-        for module in lib.modules_from_path(path):
-            for plugin in plugin_from_module(superclass, module):
-                if plugin.__name__ in plugins:
-                    print("Duplicate plug-in found: %s" % plugin)
-                    continue
-
-                plugins[plugin.__name__] = plugin
-
-    for plugin in registered:
-        if plugin.__name__ in plugins:
-            print("Warning: Overwriting %s" % plugin.__name__)
-        plugins[plugin.__name__] = plugin
-
-    return sorted(plugins.values(), key=lambda Plugin: Plugin.__name__)
+    # host context function
+    pass
 
 
 def plugin_from_module(superclass, module):
@@ -867,19 +842,8 @@ def emit(event, args=None):
 
 
 def register_plugin(superclass, obj):
-    """Register an individual `obj` of type `superclass`
-
-    Arguments:
-        superclass (type): Superclass of plug-in
-        obj (object): Subclass of `superclass`
-
-    """
-
-    if superclass not in _registered_plugins:
-        _registered_plugins[superclass] = list()
-
-    if obj not in _registered_plugins[superclass]:
-        _registered_plugins[superclass].append(obj)
+    # host context function
+    pass
 
 
 register_plugin(ThumbnailResolver, BinaryThumbnail)
@@ -887,96 +851,42 @@ register_plugin(ThumbnailResolver, TemplateResolver)
 
 
 def register_plugin_path(superclass, path):
-    """Register a directory of one or more plug-ins
-
-    Arguments:
-        superclass (type): Superclass of plug-ins to look for during discovery
-        path (str): Absolute path to directory in which to discover plug-ins
-
-    """
-
-    if superclass not in _registered_plugin_paths:
-        _registered_plugin_paths[superclass] = list()
-
-    path = os.path.normpath(path)
-    if path not in _registered_plugin_paths[superclass]:
-        _registered_plugin_paths[superclass].append(path)
+    # host context function
+    pass
 
 
 def registered_plugin_paths():
-    """Return all currently registered plug-in paths"""
-
-    # Prohibit editing in-place
-    duplicate = {
-        superclass: paths[:]
-        for superclass, paths in _registered_plugin_paths.items()
-    }
-
-    return duplicate
-
+    # host context function
+    pass
 
 def deregister_plugin(superclass, plugin):
-    """Oppsite of `register_plugin()`"""
-    _registered_plugins[superclass].remove(plugin)
+    # host context function
+    pass
 
 
 def deregister_plugin_path(superclass, path):
-    """Oppsite of `register_plugin_path()`"""
-    _registered_plugin_paths[superclass].remove(path)
+    # host context function
+    pass
 
 
 def register_root(path):
-    """Register currently active root"""
-    log.info("Registering root: %s" % path)
-    _registered_root["_"] = path
+    # host context function
+    pass
 
 
 def registered_root():
-    """Return currently registered root"""
-    root = _registered_root["_"]
-    if root:
-        return root
-
-    root = Session.get("AVALON_PROJECTS")
-    if root:
-        return os.path.normpath(root)
-
-    return ""
+    # host context function
+    pass
 
 
 def register_host(host):
-    """Register a new host for the current process
-
-    Arguments:
-        host (ModuleType): A module implementing the
-            Host API interface. See the Host API
-            documentation for details on what is
-            required, or browse the source code.
-
-    """
-    signatures = {
-        "ls": []
-    }
-
-    _validate_signature(host, signatures)
-    _registered_host["_"] = host
+    # host context function
+    pass
 
 
 def register_config(config):
-    """Register a new config for the current process
-
-    Arguments:
-        config (ModuleType): A module implementing the Config API.
-
-    """
-
-    signatures = {
-        "install": [],
-        "uninstall": [],
-    }
-
-    _validate_signature(config, signatures)
-    _registered_config["_"] = config
+    # host context function
+    pass
 
 
 def _validate_signature(module, signatures):
@@ -1039,22 +949,23 @@ def _validate_signature(module, signatures):
 
 
 def deregister_config():
-    """Undo `register_config()`"""
-    _registered_config["_"] = None
+    # host context function
+    pass
 
 
 def registered_config():
-    """Return currently registered config"""
-    return _registered_config["_"]
+    # host context function
+    pass
 
 
 def registered_host():
-    """Return currently registered host"""
-    return _registered_host["_"]
+    # host context function
+    pass
 
 
 def deregister_host():
-    _registered_host["_"] = default_host()
+    # host context function
+    pass
 
 
 def default_host():
@@ -1121,62 +1032,11 @@ def debug_host():
 
 
 def create(name, asset, family, options=None, data=None):
-    """Create a new instance
-
-    Associate nodes with a subset and family. These nodes are later
-    validated, according to their `family`, and integrated into the
-    shared environment, relative their `subset`.
-
-    Data relative each family, along with default data, are imprinted
-    into the resulting objectSet. This data is later used by extractors
-    and finally asset browsers to help identify the origin of the asset.
-
-    Arguments:
-        name (str): Name of subset
-        asset (str): Name of asset
-        family (str): Name of family
-        options (dict, optional): Additional options from GUI
-        data (dict, optional): Additional data from GUI
-
-    Raises:
-        NameError on `subset` already exists
-        KeyError on invalid dynamic property
-        RuntimeError on host error
-
-    Returns:
-        Name of instance
-
-    """
-
-    host = registered_host()
-
-    plugins = list()
-    for Plugin in discover(Creator):
-        has_family = family == Plugin.family
-
-        if not has_family:
-            continue
-
-        Plugin.log.info(
-            "Creating '%s' with '%s'" % (name, Plugin.__name__)
-        )
-
-        try:
-            plugin = Plugin(name, asset, options, data)
-
-            with host.maintained_selection():
-                print("Running %s" % plugin)
-                instance = plugin.process()
-        except Exception:
-            traceback.print_exception(*sys.exc_info())
-            continue
-        plugins.append(plugin)
-
-    assert plugins, "No Creator plug-ins were run, this is a bug"
-    return instance
+    # host context function
+    pass
 
 
-def get_representation_context(representation):
+def get_representation_context(representation, dbcon):
     """Return parenthood context for representation.
 
     Args:
@@ -1190,11 +1050,11 @@ def get_representation_context(representation):
 
     assert representation is not None, "This is a bug"
 
-    if isinstance(representation, (six.string_types, io.ObjectId)):
-        representation = io.find_one(
-            {"_id": io.ObjectId(str(representation))})
+    if isinstance(representation, (six.string_types, dbcon.ObjectId)):
+        representation = dbcon.find_one(
+            {"_id": dbcon.ObjectId(str(representation))})
 
-    version, subset, asset, project = io.parenthood(representation)
+    version, subset, asset, project = dbcon.parenthood(representation)
 
     assert all([representation, version, subset, asset, project]), (
         "This is a bug"

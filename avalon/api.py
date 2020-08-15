@@ -11,6 +11,7 @@ and likely **unreliable** for use outside of the codebase itself.
 
 from . import schema
 
+from .host_context import HostContext
 from .pipeline import (
     install,
     uninstall,
@@ -71,6 +72,7 @@ from .lib import (
 
 
 __all__ = [
+    "HostContext",
     "install",
     "uninstall",
 
